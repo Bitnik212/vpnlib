@@ -1,0 +1,3 @@
+package = io.github.bitnik212.vpnlib.ios.cinterop
+headers = vpncore.h
+headerFilter = vpncore.h

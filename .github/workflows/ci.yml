@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  native-core:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/vpncore/go.mod
+          cache-dependency-path: native/vpncore/go.sum
+      - name: Vet and build (linux)
+        working-directory: native/vpncore
+        run: |
+          go vet ./...
+          go build -buildmode=c-shared -o /tmp/libvpncore.so .
+
+  shared-and-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/vpncore/go.mod
+          cache-dependency-path: native/vpncore/go.sum
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Shared code tests (JVM)
+        run: ./gradlew :vpnlib:jvmTest
+      - name: Build libvpncore.so
+        run: ANDROID_NDK_HOME="$ANDROID_NDK_LATEST_HOME" native/build-android.sh
+      - name: Assemble Android AAR
+        run: ./gradlew :vpnlib:assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vpnlib-android
+          path: vpnlib/build/outputs/aar/*.aar
+
+  ios:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: native/vpncore/go.mod
+          cache-dependency-path: native/vpncore/go.sum
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build VpnCore.xcframework
+        run: native/build-ios.sh
+      - name: Build VpnLib.xcframework
+        run: ./gradlew :vpnlib:assembleVpnLibXCFramework
+      - uses: actions/upload-artifact@v4
+        with:
+          name: vpnlib-ios
+          path: |
+            native/build/ios/VpnCore.xcframework
+            vpnlib/build/XCFrameworks/release/VpnLib.xcframework
